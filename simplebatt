@@ -1,22 +1,65 @@
 #!/usr/bin/env python3
 
+import signal
 import re
 import subprocess
 import sys
+from gi.repository import Gtk, GObject
+
+ICON_BASE = "/usr/share/icons/Faenza-Ambiance/status/"
+ICON_SIZE = "22"
+ICON_EXT = "svg"
+UPDATE_INTERVAL = 5
 
 class Battery:
-    def __init__(self, id, state, charge, time):
+    def __init__(self, id, state, charge, time_str):
         self.id = id
         self.state = state
-        self.charge = charge
-        self.time = time
+        self.charge = int(charge)
+        # Time string includes "until charged" or "remaining"
+        self.time_str = time_str
+        # The GTK StatusIcon for this battery
+        self.icon = None
 
     def __repr__(self):
         out = "Battery\nID: {0}\n".format(self.id)
         out += "State: {0}\n".format(self.state)
-        out += "Charge: {0}%\n".format(self.charge)
-        out += "Time: {0}\n".format(self.time)
+        out += "Charge: {0}%".format(self.charge)
+
+        if self.time_str:
+            out += "\nTime: {0}".format(self.time_str)
+
         return out
+
+    def icon_file(self):
+        ret = ""
+
+        if self.charge < 10:
+            ret = 'gpm-primary-000{0}.{1}'
+        elif self.charge < 30:
+            ret = 'gpm-primary-020{0}.{1}'
+        elif self.charge < 50:
+            ret = 'gpm-primary-040{0}.{1}'
+        elif self.charge < 70:
+            ret = 'gpm-primary-060{0}.{1}'
+        elif self.charge < 90:
+            ret = 'gpm-primary-080{0}.{1}'
+        else:
+            ret = 'gpm-primary-100{0}.{1}'
+
+        if self.state == "Full" or self.state == "Charging":
+            ret = ret.format('-charging', ICON_EXT)
+        else:
+            ret = ret.format('', ICON_EXT)
+
+        ret = "{0}{1}/{2}".format(ICON_BASE, ICON_SIZE, ret)
+
+        return ret
+
+    def update_icon(self):
+        self.icon.set_from_file(self.icon_file())
+        self.icon.set_tooltip_text(self.__repr__())
+            
 
 class SimpleBatt:
     def _acpi_update(self):
@@ -27,23 +70,48 @@ class SimpleBatt:
         self._acpi_status = self._acpi_status.splitlines()
 
     def _find_batts(self):
-        regex = '^Battery ([0-9]): ([^\s]+), ([0-9]+)%, ([0-9]+:[0-9]+:[0-9]+)'
+        regex = '^Battery ([0-9]): ([^\s]+), ([0-9]+)%(, (.*))?$'
         for line in self._acpi_status:
             m = re.search(regex , line)
             if m:
                 b = Battery(m.group(1),
                             m.group(2),
                             m.group(3),
-                            m.group(4))
+                            m.group(5))
                 self.batts.append(b)
 
         if len(self.batts) == 0:
-            sys.die("No batteries found")
+            sys.exit("No batteries found")
 
     def __init__(self):
         self._acpi_update()
         self.batts = []
         self._find_batts()
 
+    def _gtk_update(self):
+        # GTK calls this update function
+        self._acpi_update()
+
+        # Make sure we run again
+        GObject.timeout_add_seconds(UPDATE_INTERVAL, self.gtk_update)
+
+
+    def gtk_start(self):
+        # Add a status icon to each battery
+        for b in self.batts:
+            b.icon = Gtk.StatusIcon()
+            b.update_icon()
+            b.icon.set_visible(True)
+
+        # Set a timer to call the gtk_update function
+        GObject.timeout_add_seconds(UPDATE_INTERVAL, self._gtk_update)
+ 
+        Gtk.main()
+
 if __name__ == "__main__":
+    # Make sure Ctrl + C works
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    
+    # Start application
     sb = SimpleBatt()
+    sb.gtk_start()
