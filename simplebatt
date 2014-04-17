@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+
+import re
+import subprocess
+import sys
+
+class Battery:
+    def __init__(self, id, state, charge, time):
+        self.id = id
+        self.state = state
+        self.charge = charge
+        self.time = time
+
+    def __repr__(self):
+        out = "Battery\nID: {0}\n".format(self.id)
+        out += "State: {0}\n".format(self.state)
+        out += "Charge: {0}%\n".format(self.charge)
+        out += "Time: {0}\n".format(self.time)
+        return out
+
+class SimpleBatt:
+    def _acpi_update(self):
+        # Example acpi output:
+        # Battery 0: Discharging, 17%, 00:48:08 remaining
+        self._acpi_status = subprocess.check_output("acpi")
+        self._acpi_status = str(self._acpi_status, encoding = "UTF-8")
+        self._acpi_status = self._acpi_status.splitlines()
+
+    def _find_batts(self):
+        regex = '^Battery ([0-9]): ([^\s]+), ([0-9]+)%, ([0-9]+:[0-9]+:[0-9]+)'
+        for line in self._acpi_status:
+            m = re.search(regex , line)
+            if m:
+                b = Battery(m.group(1),
+                            m.group(2),
+                            m.group(3),
+                            m.group(4))
+                self.batts.append(b)
+
+        if len(self.batts) == 0:
+            sys.die("No batteries found")
+
+    def __init__(self):
+        self._acpi_update()
+        self.batts = []
+        self._find_batts()
+
+if __name__ == "__main__":
+    sb = SimpleBatt()
