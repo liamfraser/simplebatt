@@ -5,21 +5,27 @@ import re
 import subprocess
 import sys
 from gi.repository import Gtk, GObject
+import logging
 
 ICON_BASE = "/usr/share/icons/Faenza-Ambiance/status/"
 ICON_SIZE = "22"
 ICON_EXT = "svg"
-UPDATE_INTERVAL = 5
+UPDATE_INTERVAL = 1 
 
 class Battery:
-    def __init__(self, id, state, charge, time_str):
-        self.id = id
-        self.state = state
-        self.charge = int(charge)
-        # Time string includes "until charged" or "remaining"
-        self.time_str = time_str
-        # The GTK StatusIcon for this battery
-        self.icon = None
+    regex = '^Battery ([0-9]): ([^\s]+), ([0-9]+)%(, (.*))?$'
+    
+    def __init__(self, acpi_string):
+        # Attempt to update our status with the acpi string
+        ret = self.update(acpi_string)
+        if ret:
+            self.valid = True
+        else:
+            self.valid = False
+        
+        # We want to keep track of the previous icon file so we're not
+        # unnecessarily changing it
+        self._prev_icon = None
 
     def __repr__(self):
         out = "Battery\nID: {0}\n".format(self.id)
@@ -30,6 +36,22 @@ class Battery:
             out += "\nTime: {0}".format(self.time_str)
 
         return out
+
+    def update(self, acpi_string):
+        m = re.search(Battery.regex, acpi_string)
+
+        if m:
+            self.id = m.group(1)
+            self.state = m.group(2)
+            self.charge = int(m.group(3))
+            # Time string includes "until charged" or "remaining"
+            self.time_str = m.group(5)
+
+            return True
+    
+        else:
+            logging.debug("Couldn't parse acpi string: {0}".format(acpi_string))
+            return False
 
     def icon_file(self):
         ret = ""
@@ -57,10 +79,19 @@ class Battery:
         return ret
 
     def update_icon(self):
-        self.icon.set_from_file(self.icon_file())
+        logging.debug("Updating text: {0}".format(self.__repr__()))
         self.icon.set_tooltip_text(self.__repr__())
-            
+        
+        new_icon = self.icon_file()
+        if self._prev_icon != new_icon:
+            logging.debug("Updating icon: {0}".format(new_icon))
+            self.icon.set_from_file(self.icon_file())
+            self._prev_icon = new_icon
 
+    def destroy(self):
+        b.icon.set_visible(True)
+        b.icon = None
+        
 class SimpleBatt:
     def _acpi_update(self):
         # Example acpi output:
@@ -70,39 +101,59 @@ class SimpleBatt:
         self._acpi_status = self._acpi_status.splitlines()
 
     def _find_batts(self):
-        regex = '^Battery ([0-9]): ([^\s]+), ([0-9]+)%(, (.*))?$'
+        count = 1
         for line in self._acpi_status:
-            m = re.search(regex , line)
-            if m:
-                b = Battery(m.group(1),
-                            m.group(2),
-                            m.group(3),
-                            m.group(5))
+            b = Battery(line)
+
+            # Only add the battery if it's valid and there is not already one
+            # in it's place
+            if b.valid and (len(self.batts) < count):
+                # Create the GTK status icon
+                b.icon = Gtk.StatusIcon()
+                b.update_icon()
+                b.icon.set_visible(True)
+
                 self.batts.append(b)
+                count += 1
 
         if len(self.batts) == 0:
             sys.exit("No batteries found")
 
     def __init__(self):
+        logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+
         self._acpi_update()
         self.batts = []
         self._find_batts()
 
     def _gtk_update(self):
+        logging.debug("Updating")
         # GTK calls this update function
+        # Update our acpi data, then update each battery
         self._acpi_update()
 
+        # Try and find any new batteries
+        self._find_batts()
+
+        # Update each battery
+        count = 0
+        for b in self.batts:
+            ret = b.update(self._acpi_status[count])
+            if ret == False:
+                # Battery probably no longer exists, destroy it
+                b.destroy()
+            else:
+                # Otherwise update the batteries icon
+                b.update_icon()
+                pass
+                
+            count += 1
+
         # Make sure we run again
-        GObject.timeout_add_seconds(UPDATE_INTERVAL, self.gtk_update)
+        GObject.timeout_add_seconds(UPDATE_INTERVAL, self._gtk_update)
 
 
     def gtk_start(self):
-        # Add a status icon to each battery
-        for b in self.batts:
-            b.icon = Gtk.StatusIcon()
-            b.update_icon()
-            b.icon.set_visible(True)
-
         # Set a timer to call the gtk_update function
         GObject.timeout_add_seconds(UPDATE_INTERVAL, self._gtk_update)
  
