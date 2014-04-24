@@ -10,7 +10,7 @@ import logging
 ICON_BASE = "/usr/share/icons/Faenza-Ambiance/status/"
 ICON_SIZE = "22"
 ICON_EXT = "svg"
-UPDATE_INTERVAL = 1 
+UPDATE_INTERVAL = 5
 
 class Battery:
     regex = '^Battery ([0-9]): ([^\s]+), ([0-9]+)%(, (.*))?$'
@@ -56,15 +56,15 @@ class Battery:
     def icon_file(self):
         ret = ""
 
-        if self.charge < 10:
+        if self.charge <= 10:
             ret = 'gpm-primary-000{0}.{1}'
-        elif self.charge < 30:
+        elif self.charge <= 30:
             ret = 'gpm-primary-020{0}.{1}'
-        elif self.charge < 50:
+        elif self.charge <= 50:
             ret = 'gpm-primary-040{0}.{1}'
-        elif self.charge < 70:
+        elif self.charge <= 70:
             ret = 'gpm-primary-060{0}.{1}'
-        elif self.charge < 90:
+        elif self.charge <= 90:
             ret = 'gpm-primary-080{0}.{1}'
         else:
             ret = 'gpm-primary-100{0}.{1}'
