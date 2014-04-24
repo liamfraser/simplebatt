@@ -128,7 +128,7 @@ class SimpleBatt:
         self._acpi_status = self._acpi_status.splitlines()
 
     def _find_batts(self):
-        count = 1
+        count = 0
         for line in self._acpi_status:
             b = Battery(line)
 
@@ -142,9 +142,6 @@ class SimpleBatt:
 
                 self.batts.append(b)
                 count += 1
-
-        if len(self.batts) == 0:
-            sys.exit("No batteries found")
 
     def __init__(self):
         #logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
