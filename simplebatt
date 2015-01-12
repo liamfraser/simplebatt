@@ -64,6 +64,9 @@ class Battery:
 
         return out
 
+    def __eq__(self, other):
+        return self.id == other.id
+
     def update(self, acpi_string):
         m = re.search(Battery.regex, acpi_string)
 
@@ -128,24 +131,24 @@ class SimpleBatt:
         self._acpi_status = self._acpi_status.splitlines()
 
     def _find_batts(self):
-        count = 0
         for line in self._acpi_status:
             b = Battery(line)
 
             # Only add the battery if it's valid and there is not already one
             # in it's place
-            if b.valid and (len(self.batts) <= count):
+            if (b.valid) and (b not in self.batts):
                 # Create the GTK status icon
                 b.icon = Gtk.StatusIcon()
                 b.update_icon()
                 b.icon.set_visible(True)
 
                 self.batts.append(b)
-                count += 1
 
-    def __init__(self):
-        #logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
-        logging.basicConfig(stream=sys.stderr, level=logging.ERROR)
+    def __init__(self, debug):
+        if debug:
+            logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+        else:
+            logging.basicConfig(stream=sys.stderr, level=logging.ERROR)
 
         self._acpi_update()
         self.batts = []
@@ -163,8 +166,8 @@ class SimpleBatt:
         # Update each battery
         count = 0
         for b in self.batts:
-            logging.debug("Attempting to fetch self._acpi_status[{0}]".format(count))
-            logging.debug(self._acpi_status)
+            logging.debug("Attempting to fetch self._acpi_status[{0}]...".format(count))
+            logging.debug(self._acpi_status[count])
 
             ret = False
             try:
@@ -197,7 +200,13 @@ if __name__ == "__main__":
 
     # Make sure Ctrl + C works
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    
+
+    # Check arguments
+    debug = False
+    for arg in sys.argv:
+        if arg == "-d" or arg == "--debug":
+            debug = True
+ 
     # Start application
-    sb = SimpleBatt()
+    sb = SimpleBatt(debug)
     sb.gtk_start()
