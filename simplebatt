@@ -32,7 +32,6 @@ import subprocess
 import sys
 from gi.repository import Gtk, GObject
 import logging
-from tendo import singleton
 
 ICON_BASE = "/usr/share/icons/Faenza-Ambiance/status/"
 ICON_SIZE = "22"
@@ -195,9 +194,6 @@ class SimpleBatt:
         Gtk.main()
 
 if __name__ == "__main__":
-    # will sys.exit(-1) if other instance is runnin
-    me = singleton.SingleInstance() 
-
     # Make sure Ctrl + C works
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
