@@ -30,6 +30,8 @@ import signal
 import re
 import subprocess
 import sys
+import gi
+gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject
 import logging
 
@@ -196,6 +198,10 @@ class SimpleBatt:
 if __name__ == "__main__":
     # Make sure Ctrl + C works
     signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    # Check not running
+    if len(subprocess.check_output("ps aux | grep simplebatt | grep python", shell=True).splitlines()) > 2:
+        sys.exit("Already running")
 
     # Check arguments
     debug = False
